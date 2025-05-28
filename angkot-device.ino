@@ -7,13 +7,14 @@
 
 PN532_I2C pn532i2c(Wire);
 PN532 nfc(pn532i2c);
+volatile bool isNfcConnected = false;
 
 ESP32MQTTClient mqttClient("angkot", "angkot12", "192.168.100.36", 1883, "6821ea7a1ea62f0c45c59f62");
 ESP32GPS gps(16,17);
 
 std::vector<String> daftarIdPenumpang;
 int idxPenumpangDetected = -1, statusPenumpangNaik;
-String idDetected;
+String uidDetected;
 
 void setup() {
   Serial.begin(115200);
@@ -22,88 +23,84 @@ void setup() {
   mqttClient.begin();
   mqttClient.setCallback(processMqtt);
   gps.begin();
-  nfc.begin();
   
-  uint32_t versiondata = nfc.getFirmwareVersion();
-  if (! versiondata) {
-    Serial.print("Didn't find PN53x board");
-    while (1); // halt
-  }
-  
-  // Got ok data, print it out!
-  Serial.print("Found chip PN5"); Serial.println((versiondata>>24) & 0xFF, HEX); 
-  Serial.print("Firmware ver. "); Serial.print((versiondata>>16) & 0xFF, DEC); 
-  Serial.print('.'); Serial.println((versiondata>>8) & 0xFF, DEC);
-  
-  // Set the max number of retry attempts to read from a card
-  // This prevents us from waiting forever for a card, which is
-  // the default behaviour of the PN532.
-  //nfc.setPassiveActivationRetries(0xFF);
-  
-  // configure board to read RFID tags
-  nfc.SAMConfig();
 }
 
 void loop() {
   bool success;
-  uint8_t responseLength = 32;
+  // Buffer to store the UID
+  uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };
+  // UID size (4 or 7 bytes depending on card type)
+  uint8_t uidLength;
 
-  Serial.println("Waiting for an ISO14443A card");
-
-  success = nfc.inListPassiveTarget();
-
-  if (success) {
-    Serial.println("Found something!");
-
-    // SELECT AID to initiate communication with Android HCE app
-    uint8_t selectApdu[] = {
-      0x00, 0xA4, 0x04, 0x00,
-      0x07, 0xA0, 0x00, 0xDA, 0xDA, 0xDA, 0xDA, 0xDA,
-      0x00
-    };
-
-    uint8_t response[32];
-    success = nfc.inDataExchange(selectApdu, sizeof(selectApdu), response, &responseLength);
-
-    if (success) {
-      Serial.println("SELECT AID successful");
-
-      // Now send "Hello" APDU and expect an ID or some response from HCE app
-      uint8_t apdu[] = "Hello from Arduino";
-      uint8_t back[32];
-      uint8_t length = 32;
-
-      success = nfc.inDataExchange(apdu, sizeof(apdu), back, &length);
-      if (success) {
-        Serial.print("APDU response: ");
-        for (int i = 0; i < length; i++) {
-          Serial.write(back[i]); // Print raw data
-        }
-        Serial.println();
-
-        // Convert response to string (assume ASCII or UTF-8 ID)
-        char idStr[33];
-        memcpy(idStr, back, length);
-        idStr[length] = '\0';
-
-        idDetected = "RFID000001";
-
-        processNfc();
-
-        delay(1000); // optional pause
-      } else {
-        Serial.println("Failed to get data from APDU.");
-      }
-
-    } else {
-      Serial.println("Failed SELECT AID.");
-    }
-
-  } else {
-    Serial.println("No card found.");
+  while (!isNfcConnected) {
+    isNfcConnected = connectNfc();
   }
 
-  delay(1000);
+  // Wait for an ISO14443A type cards (Mifare, etc.).  When one is found
+  // 'uid' will be populated with the UID, and uidLength will indicate
+  // if the uid is 4 bytes (Mifare Classic) or 7 bytes (Mifare Ultralight)
+  success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, &uid[0], &uidLength);
+
+  // If the card is detected, print the UID
+  if (success)
+  {
+    uidDetected = "";  // Create a string to store the UID
+
+    Serial.println("Card Detected");
+    Serial.print("Size of UID: "); Serial.print(uidLength, DEC);
+    Serial.println(" bytes");
+
+    // Convert UID to string
+    for (uint8_t i = 0; i < uidLength; i++) {
+      uidDetected += String(uid[i], HEX);  // Append each byte of UID as a hex string
+    }
+
+    // Print the UID string (optional)
+    Serial.print("UID as String: ");
+    Serial.println(uidDetected);
+
+    processNfc();
+    
+    delay(1000);
+    isNfcConnected = connectNfc();
+  }
+  else
+  {
+    // PN532 probably timed out waiting for a card
+    Serial.println("Timed out waiting for a card");
+  }
+}
+
+bool connectNfc() {
+  
+  nfc.begin();
+
+  // isNfcConnected, show version
+  uint32_t versiondata = nfc.getFirmwareVersion();
+  if (! versiondata)
+  {
+    Serial.println("PN53x card not found!");
+    return false;
+  }
+
+  //port
+  // Serial.print("Found chip PN5"); Serial.println((versiondata >> 24) & 0xFF, HEX);
+  // Serial.print("Firmware version: "); Serial.print((versiondata >> 16) & 0xFF, DEC);
+  // Serial.print('.'); Serial.println((versiondata >> 8) & 0xFF, DEC);
+
+  // Set the max number of retry attempts to read from a card
+  // This prevents us from waiting forever for a card, which is
+  // the default behaviour of the PN532.
+  nfc.setPassiveActivationRetries(0xFF);
+
+  // configure board to read RFID tags
+  nfc.SAMConfig();
+
+  Serial.println("Waiting for card (ISO14443A Mifare)...");
+  Serial.println("");
+
+  return true;
 }
 
 int cariPenumpang() {
@@ -112,7 +109,7 @@ int cariPenumpang() {
   int status = 0;
 
   while(i < frekDaftarIdPenumpang && status == 0) {
-    if (daftarIdPenumpang[i] == idDetected) {
+    if (daftarIdPenumpang[i] == uidDetected) {
       status = 1;
     } else {
       i++;
@@ -133,7 +130,7 @@ void processNfc() {
     idxPenumpangDetected = cariPenumpang();
     statusPenumpangNaik = (idxPenumpangDetected == -1);
     snprintf(message, sizeof(message),
-      "naik_turun_angkot,%s,%d,%.6f,%.6f", idDetected, statusPenumpangNaik, lat, lon);
+      "naik_turun_angkot,%s,%d,%.6f,%.6f", uidDetected, statusPenumpangNaik, lat, lon);
 
     mqttClient.publish(message);
     Serial.print("MQTT Message Sent: ");
@@ -177,9 +174,9 @@ void processMqtt(char* topic, byte* payload, unsigned int length) {
     if(statusPenumpangNaik == 0) {
       daftarIdPenumpang.erase(daftarIdPenumpang.begin() + idxPenumpangDetected);
     } else {
-      daftarIdPenumpang.push_back(idDetected);
+      daftarIdPenumpang.push_back(uidDetected);
     }
   }
   // idxPenumpangDetected = -1;
-  // idDetected = "";
+  // uidDetected = "";
 }
