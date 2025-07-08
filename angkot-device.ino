@@ -1,9 +1,12 @@
 #include <Wire.h>
+#include <LiquidCrystal_I2C.h>
 #include <PN532_I2C.h>
 #include <PN532.h>
 #include "ESP32MQTTClient.h"
 #include "localgps.h"
 #include <vector>
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);  // 0x27 is the I2C address, 16x2 LCD
 
 PN532_I2C pn532i2c(Wire);
 PN532 nfc(pn532i2c);
@@ -20,13 +23,35 @@ void setup() {
   Serial.begin(115200);
   Serial.println("-------Peer to Peer HCE--------");
 
+  lcd.init();                      // Initialize the LCD
+  lcd.backlight();                 // Turn on the backlight
+  lcd.setCursor(0, 0);             
+  lcd.print("Starting...");        // Show "Starting..." on the LCD
+  lcd.setCursor(0, 1);             
+  lcd.print("Broker");        // Show "Starting..." on the LCD
+
   mqttClient.begin();
   mqttClient.setCallback(processMqtt);
+
+  delay(1000);
+
+  lcd.clear();
+  lcd.setCursor(0, 0);             
+  lcd.print("Starting...");        // Show "Starting..." on the LCD
+  lcd.setCursor(0, 1);             
+  lcd.print("GPS");        // Show "Starting..." on the LCD
   gps.begin();
-  
 }
 
 void loop() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Cur: ");
+  lcd.print(daftarIdPenumpang.size());
+  lcd.setCursor(0, 1);
+  lcd.print("Max: ");
+  lcd.print(13);
+
   bool success;
   // Buffer to store the UID
   uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };
@@ -45,6 +70,12 @@ void loop() {
   // If the card is detected, print the UID
   if (success)
   {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Card Detected");
+    lcd.setCursor(0, 1);
+    lcd.print("Processing...");
+
     uidDetected = "";  // Create a string to store the UID
 
     Serial.println("Card Detected");
@@ -61,7 +92,8 @@ void loop() {
     Serial.println(uidDetected);
 
     processNfc();
-    
+
+    gps.update();
     delay(1000);
     isNfcConnected = connectNfc();
   }
@@ -135,8 +167,17 @@ void processNfc() {
     mqttClient.publish(message);
     Serial.print("MQTT Message Sent: ");
     Serial.println(message);
+
+    bool isReceived = mqttClient.loopUntilReceived();
     
-    mqttClient.loopUntilReceived();
+    if(!isReceived) {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Failed");
+    }
+
+    gps.update();
+    delay(1000);
   } else {
     Serial.println("GPS not available.");
   }
@@ -176,7 +217,13 @@ void processMqtt(char* topic, byte* payload, unsigned int length) {
     } else {
       daftarIdPenumpang.push_back(uidDetected);
     }
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Success");
+  } else {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Failed");
   }
-  // idxPenumpangDetected = -1;
-  // uidDetected = "";
 }

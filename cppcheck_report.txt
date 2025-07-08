@@ -1,0 +1,38 @@
+ESP32MQTTClient.h:4:0: information: Include file: <WiFi.h> not found. Please note: Cppcheck does not need standard library headers to get proper results. [missingIncludeSystem]
+#include <WiFi.h>
+^
+ESP32MQTTClient.h:5:0: information: Include file: <PubSubClient.h> not found. Please note: Cppcheck does not need standard library headers to get proper results. [missingIncludeSystem]
+#include <PubSubClient.h>
+^
+ESP32MQTTClient.cpp:3:18: warning: Member variable 'ESP32MQTTClient::_messageReceived' is not initialized in the constructor. [uninitMemberVar]
+ESP32MQTTClient::ESP32MQTTClient(const char* ssid, const char* password, const char* mqtt_server, int mqtt_port, const char* client_id)
+                 ^
+ESP32MQTTClient.cpp:80:8: style: The scope of the variable 'isSuccess' can be reduced. [variableScope]
+  bool isSuccess = false;
+       ^
+ESP32MQTTClient.cpp:80:18: style: Variable 'isSuccess' is assigned a value that is never used. [unreadVariable]
+  bool isSuccess = false;
+                 ^
+localgps.h:4:0: information: Include file: <TinyGPS++.h> not found. Please note: Cppcheck does not need standard library headers to get proper results. [missingIncludeSystem]
+#include <TinyGPS++.h>
+^
+localgps.h:5:0: information: Include file: <HardwareSerial.h> not found. Please note: Cppcheck does not need standard library headers to get proper results. [missingIncludeSystem]
+#include <HardwareSerial.h>
+^
+ESP32MQTTClient.cpp:49:0: style: The function 'loopUntilReceived' is never used. [unusedFunction]
+bool ESP32MQTTClient::loopUntilReceived() {
+^
+localgps.cpp:20:0: style: The function 'update' is never used. [unusedFunction]
+void ESP32GPS::update() {
+^
+localgps.cpp:26:0: style: The function 'locationAvailable' is never used. [unusedFunction]
+bool ESP32GPS::locationAvailable() {
+^
+localgps.cpp:30:0: style: The function 'getLatitude' is never used. [unusedFunction]
+double ESP32GPS::getLatitude() {
+^
+localgps.cpp:34:0: style: The function 'getLongitude' is never used. [unusedFunction]
+double ESP32GPS::getLongitude() {
+^
+nofile:0:0: information: Active checkers: 172/592 (use --checkers-report=<filename> to see details) [checkersReport]
+

@@ -11,7 +11,7 @@ class ESP32MQTTClient {
     void loop();
     void publish(const char* message);
     void setCallback(MQTT_CALLBACK_SIGNATURE);
-    void loopUntilReceived();
+    bool loopUntilReceived();
     
   private:
     void connectWiFi();

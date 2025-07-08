@@ -46,7 +46,7 @@ void ESP32MQTTClient::loop() {
   }
 }
 
-void ESP32MQTTClient::loopUntilReceived() {
+bool ESP32MQTTClient::loopUntilReceived() {
   _messageReceived = false;
 
   // Ensure MQTT is connected
@@ -70,6 +70,8 @@ void ESP32MQTTClient::loopUntilReceived() {
   } else {
     Serial.println("timeout waiting for message");
   }
+
+  return _messageReceived;
 }
 
 void ESP32MQTTClient::publish(const char* message) {
